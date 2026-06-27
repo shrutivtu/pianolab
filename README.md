@@ -1,8 +1,40 @@
 # PianoLab
 
-A focused one-screen web app for learning to read piano notes. A note appears on a music staff, you tap the matching key on the on-screen piano, you hear it. Wrong tap? The correct key flashes amber as a hint. That's it.
+**An interactive piano that lets you see and hear the physics of sound.**
 
-This is a weekend-MVP build of the **Note Trainer** — purposefully one feature, done well.
+Play a note and you don't just hear it — you watch what the sound actually *is*: its waveform on an oscilloscope and its harmonic content on a live frequency spectrum, both reacting in real time. It turns a piano into a hands-on lab for how audio works, bridging music, physics, and audio engineering.
+
+<!-- Screenshot / GIF of the Lab goes here — a short clip of switching sine → square and watching the spectrum stack harmonics sells it instantly. -->
+
+## Two modes
+
+**Lab** — the core experience. Press a key and watch:
+
+- an **oscilloscope** (the waveform — air pressure over time), and
+- a **frequency spectrum** (an FFT — the same sound split into the frequencies it contains).
+
+Switch the waveform between **sine, square, sawtooth, and triangle** and watch the spectrum change: a pure sine is a single spike, while square and saw stack up extra harmonics — which is exactly why they sound brighter. A **"realistic piano"** toggle swaps the raw synth for a sampled grand piano, routed through the same analyser so the visualizers track it too.
+
+**Trainer** — a focused sight-reading drill. A note appears on a staff, you tap the matching key, and it scores you. Wrong tap? The correct key flashes amber as a hint.
+
+## How it works
+
+The whole thing runs on the **Web Audio API** and **canvas** — no audio libraries doing the heavy lifting for the visualizations.
+
+- One shared `AudioContext` feeds a master gain → `AnalyserNode` → output.
+- The Lab's default engine creates a raw `OscillatorNode` per keypress with a short envelope and a selectable waveform.
+- The "realistic piano" engine reuses a Tone.js Salamander sampler, connected through the **same** analyser, so a single visualizer pipeline renders whichever source is playing.
+- The oscilloscope reads `getByteTimeDomainData`; the spectrum reads `getByteFrequencyData`. Both draw to high-DPI canvases and settle to a calm baseline when silent (friendly to `prefers-reduced-motion`).
+- The `AudioContext` is unlocked on the first user gesture, as browsers require.
+
+## Tech
+
+- **Web Audio API + Canvas** — oscillators, analyser, and the live visualizers
+- Vite + React 19 + TypeScript
+- Tailwind CSS (class-based dark mode)
+- Tone.js — the sampled "realistic piano" engine
+- VexFlow 5 — staff notation in the Trainer
+- `vite-plugin-pwa` — installable, offline-capable
 
 ## Run locally
 
@@ -13,83 +45,49 @@ npm run dev
 
 Open the URL Vite prints (typically `http://localhost:5173/`).
 
-## Build
-
 ```bash
-npm run build       # production build to dist/
-npm run preview     # preview the production build locally
+npm run build     # production build to dist/
+npm run preview   # preview the production build
 ```
 
-## Deploy to Vercel (one-click-ish)
+## Accessibility
 
-1. Push this folder to a GitHub repo.
-2. In Vercel: **Add New → Project → Import** the repo.
-3. Vercel auto-detects Vite. Defaults are fine:
-   - Build command: `npm run build`
-   - Output directory: `dist`
-4. Click **Deploy**.
-
-No environment variables required.
-
-## Install as a PWA
-
-- **iOS**: open in Safari → Share → Add to Home Screen.
-- **Android / Desktop Chrome**: address-bar install icon, or three-dot menu → Install.
-
-The app shell, fonts, and Salamander piano samples are cached for offline use after the first run.
-
-## What's in it
-
-- **Treble clef, 5 notes** (C4 D4 E4 F4 G4) shown as whole notes, one at a time.
-- **Two-octave keyboard** (C3–C5), responsive, ≥44px touch targets on phones.
-- **Tone.js Sampler** with the Salamander Grand Piano samples (hosted by Tone.js, no setup).
-- **Tiny PolySynth fallback** plays instantly while samples load in the background.
-- **Dark mode by default**, light/dark toggle in the header, preference persisted.
-- **"Show note names" toggle** overlays C/D/E/F/G letters on the relevant white keys.
-- **PWA-ready** out of the box: manifest, service worker, icons, `theme-color`, `apple-touch-icon`.
-
-## Tech
-
-- Vite + React 19 + TypeScript
-- Tailwind CSS (dark mode via `class` strategy)
-- Tone.js (Sampler + PolySynth fallback)
-- VexFlow 5 (SVG renderer)
-- `vite-plugin-pwa` (Workbox under the hood)
+Keyboard-playable, `aria` labels on keys and visualizers, ≥44px touch targets on phones, a light/dark toggle whose choice is persisted, and reduced-motion-friendly visualizers.
 
 ## Project layout
 
 ```
 src/
   components/
-    Staff.tsx          # renders current target note via VexFlow
-    Keyboard.tsx       # two-octave on-screen piano
-    Header.tsx         # title, score, reset, light/dark toggle
+    LabView.tsx        # the Lab: engine + waveform controls, visualizers, keyboard
+    Oscilloscope.tsx   # time-domain waveform canvas
+    Spectrum.tsx       # FFT frequency-spectrum canvas
+    TrainerView.tsx    # sight-reading mode
+    Keyboard.tsx       # shared two-octave on-screen piano
+    Staff.tsx          # VexFlow staff for the Trainer
+    Header.tsx         # Lab/Trainer tabs + dark-mode toggle
     ScoreDisplay.tsx
   hooks/
-    usePianoSynth.ts   # Tone.js: sampler + instant-play fallback synth
-    useNoteTrainer.ts  # game state: target, score, feedback, attempt()
+    useLabAudio.ts     # shared AudioContext, raw synth + sampler, analyser
+    usePianoSynth.ts   # Tone.js piano used by the Trainer
+    useNoteTrainer.ts  # Trainer state: target, score, feedback
   lib/
-    notes.ts           # general note model — pitch, accidental, octave, MIDI, VexFlow key
-  App.tsx
+    notes.ts           # note model + midiToFreq (A4 = 440, equal temperament)
+  App.tsx              # mode shell (Lab | Trainer)
   main.tsx
 ```
 
-## Design decisions (calls made on ambiguous points)
+## Roadmap
 
-- **Audio unlock on first tap.** Browsers won't start audio without a user gesture. The first key press calls `Tone.start()`, and a "Tap any key to start" hint shows until then.
-- **Instant audio via fallback synth.** The Salamander samples are several MB. A lightweight `Tone.PolySynth` is always ready and plays the first taps. When samples finish loading, the sampler takes over silently. The status line shows "Loading piano…" while this happens.
-- **Wrong tap → amber, not red, on the correct key.** The wrong key flashes red as expected, but the *correct* key pulses **amber** (warm yellow) instead of red. Red-on-red felt punishing; amber reads more clearly as "here's the hint."
-- **No immediate repeats.** Pure random would pick the same note 3× in a row sometimes; the trainer avoids picking the same note as the previous target.
-- **Reset button in header.** The spec didn't mention how to reset score; a small "Reset" link lives in the header next to the dark-mode toggle.
-- **Dark mode default.** Spec said default dark; system-preference is used the very first time, then the user's choice is persisted in `localStorage`.
-- **Salamander samples are cached.** The service worker caches them on first load with a `CacheFirst` strategy so subsequent loads (including offline) are instant.
+Built so far: the Lab's core loop (playable synth + oscilloscope + spectrum), waveform selection, the realistic-piano engine, and the Trainer mode. Planned next:
 
-## Future-proofing (intentionally NOT built)
+- Per-key frequency labels and the equal-temperament relationship, `f = 440 × 2^(n/12)`
+- An additive-synthesis panel — stack harmonics and watch a sine build toward a square/saw (Fourier, made visible)
+- An ADSR envelope visualizer
+- Two-note **beat frequency** / interference and interval ratios (octave 2:1, fifth 3:2)
+- A low-pass / high-pass `BiquadFilterNode` — the bridge from physics to EQ
+- Web MIDI input
 
-The note model in `src/lib/notes.ts` is general — pitch class, accidental, octave, MIDI, plus VexFlow and Tone.js identifiers. Adding bass clef, sharps, flats, or the full piano range is data-only — no model changes.
+## License
 
-The keyboard renders from a `KEYBOARD_RANGE` array, and the trainer takes its target pool as a parameter (`useNoteTrainer(TREBLE_TARGETS)`). To add a "bass clef" mode, you'd pass a different pool and tell the Staff to draw a bass clef.
-
-Input is loosely coupled: any input source (on-screen tap today, Web MIDI tomorrow) just needs to call `trainer.attempt(note)` and `synth.play(note.toneId)`. The MIDI hook will plug into the same handler.
-
-The `App` shell is a single mode today; a mode-switcher would sit in the header without restructuring anything below.
+MIT
