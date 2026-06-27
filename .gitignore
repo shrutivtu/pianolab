@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Internal planning / handoff notes — keep local, not in the public repo
+PIANOLAB_PLAN.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

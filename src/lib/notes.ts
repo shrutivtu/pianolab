@@ -98,3 +98,11 @@ export const TREBLE_TARGETS: Note[] = [
 export function isNaturalWhiteKey(note: Note): boolean {
   return note.accidental === '';
 }
+
+/**
+ * MIDI number -> frequency in Hz, equal temperament with A4 (MIDI 69) = 440 Hz.
+ * This is the f = 440 × 2^((m-69)/12) relationship the Lab teaches.
+ */
+export function midiToFreq(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
